@@ -9,7 +9,7 @@ import numpy as np
 
 
 class DQN():
-    def __init__(self, n_actions, n_features, memory_length, learning_rate):
+    def __init__(self, n_actions, n_features, memory_length, learning_rate, epsilon = 1, epsilon_decay = 0.995, min_epsilon = 0.01):
         self.model = Sequential()
         self.model.add(Dense(24, input_shape=(n_features, ), activation="relu"))
         self.model.add(Dense(24, activation="relu"))
@@ -18,8 +18,12 @@ class DQN():
 
         self.memory = deque(maxlen = memory_length)
 
-    def next_action(self, epsilon, current_state):
-        if np.random.random() < epsilon:
+        self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.min_epsilon = min_epsilon
+
+    def next_action(self, current_state):
+        if np.random.random() < self.epsilon:
             return np.random.randint(low = 0, high = n_actions)
         q_values = self.model.predict(current_state.reshape(1, -1))
         return np.argmax(q_values[0])
@@ -37,6 +41,7 @@ class DQN():
             q_values = self.model.predict(state)
             q_values[0][action] = qsa
             self.model.fit(state, q_values, verbose = False)
+            self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
 
 
     def add_to_experience(self, experience):
@@ -51,7 +56,7 @@ def evaluate(env, dqn):
         done = False
         iteration_reward = 0
         while not done:
-            action = dqn.next_action(epsilon, state)
+            action = dqn.next_action(state)
             next_state, reward, done, info = env.step(action)
             iteration_reward += reward
             state = next_state
@@ -64,10 +69,9 @@ if __name__ == "__main__":
     feature_space_shape = env.observation_space.shape
     n_actions = env.action_space.n
 
-    learning_rate = 0.01
-    epsilon = 0.4
+    learning_rate = 0.001
     episodes_to_train = 1000
-    dqn = DQN(n_actions, feature_space_shape[0], 1000, learning_rate)
+    dqn = DQN(n_actions, feature_space_shape[0], 1000000, learning_rate)
 
     for episode in range(episodes_to_train):
         state = env.reset().reshape(1, -1)
@@ -75,11 +79,11 @@ if __name__ == "__main__":
         done = False
         while not done:
             steps += 1
-            action = dqn.next_action(epsilon, state)
+            action = dqn.next_action(state)
             next_state, reward, done, info = env.step(action)
             dqn.add_to_experience((state.reshape(1, -1), action, reward, next_state.reshape(1,-1), done))
             state = next_state
-            dqn.experience_replay(20, 0.99)
+            dqn.experience_replay(20, 0.95)
         if episode % 100 == 0:
             print(evaluate(env, dqn))
 
