@@ -1,5 +1,5 @@
 import gym
-from _collections import deque
+import math
 
 import torch
 import torch.nn as nn
@@ -35,72 +35,79 @@ class DQN(nn.Module):
 
 class Agent():
     def __init__(self, gamma, epsilon, learning_rate, input_dims, batch_size, n_actions,
-                 max_mem_size=1000000, eps_min=0.01, eps_dec=0.996):
+                 memory_size=1000000, min_epsilon=0.01, epsilon_decay=0.995):
         self.gamma = gamma
         self.epsilon = epsilon
-        self.eps_min = eps_min
-        self.eps_dec = eps_dec
+        self.eps_min = min_epsilon
+        self.eps_dec = epsilon_decay
         self.learning_rate = learning_rate
         self.input_dims = input_dims
         self.batch_size = batch_size
         self.n_actions = n_actions
         self.action_space = list(range(n_actions))
-        self.Q_eval = DQN(learning_rate, input_dims=input_dims,
-                          n_actions=n_actions,
-                          l1_dims=24, l2_dims=24)
-        self.memory = deque(maxlen=max_mem_size)
+        self.Q_network = DQN(learning_rate, input_dims=input_dims,
+                             n_actions=n_actions,
+                             l1_dims=24, l2_dims=24)
+        self.memory = deque(maxlen=memory_size)
 
     def remember_experience(self, experience):
         self.memory.append(experience)
 
     def choose_action(self, observation):
-        rand = np.random.random()
-        if rand < self.epsilon:
+        if np.random.random() < self.epsilon:
             return np.random.choice(self.action_space)
 
-        actions = self.Q_eval.forward(observation)
+        actions = self.Q_network.forward(observation)
         return torch.argmax(actions).item()
 
     def learn(self):
-        if len(self.memory) > self.batch_size:
-            self.Q_eval.optimizer.zero_grad()
+        if len(self.memory) < self.batch_size:
+            return
 
-            batch = np.random.choice(len(self.memory), self.batch_size)
-            replay_batch = np.array(self.memory)[batch]
-            observation_batch, action_batch, next_observation_batch, reward_batch, terminal_batch = list(zip(*replay_batch))
+        self.Q_network.optimizer.zero_grad()
 
-            reward_batch = torch.Tensor(reward_batch).to(self.Q_eval.device)
-            terminal_batch = torch.Tensor(terminal_batch).type(torch.int8).to(self.Q_eval.device)
+        batch_indexes = np.random.choice(len(self.memory), self.batch_size)
+        replay_batch = np.array(self.memory)[batch_indexes]
+        observation_batch, action_batch, reward_batch, next_observation_batch, terminal_batch = list(zip(*replay_batch))
 
-            q_eval = self.Q_eval.forward(observation_batch).to(self.Q_eval.device)
-            q_target = self.Q_eval.forward(observation_batch).to(self.Q_eval.device)
-            q_next = self.Q_eval.forward(next_observation_batch).to(self.Q_eval.device)
+        reward_batch = torch.Tensor(reward_batch).to(self.Q_network.device)
+        # False is 0, True is 1
+        terminal_batch = torch.Tensor(terminal_batch).type(torch.int8).to(self.Q_network.device)
 
-            q_target[:, action_batch] = reward_batch + self.gamma * torch.max(q_next, dim=1).values * terminal_batch
+        q_eval = self.Q_network.forward(observation_batch).to(self.Q_network.device)
+        q_target = self.Q_network.forward(observation_batch).to(self.Q_network.device)
+        q_next = self.Q_network.forward(next_observation_batch).to(self.Q_network.device)
+        q_target[np.arange(self.batch_size), action_batch] = reward_batch + self.gamma * torch.max(q_next, dim=1).values * (1 - terminal_batch)
 
-            self.epsilon = max(self.epsilon * self.eps_dec, self.eps_min)
-            loss = self.Q_eval.loss(q_target, q_eval).to(self.Q_eval.device)
-            loss.backward()
-            self.Q_eval.optimizer.step()
+        loss = self.Q_network.loss(q_target, q_eval).to(self.Q_network.device)
+        loss.backward()
+        self.Q_network.optimizer.step()
+
+        self.epsilon = max(self.epsilon * self.eps_dec, self.eps_min)
 
 
 if __name__ == "__main__":
     n_episodes = 1000
+
     env = gym.make('CartPole-v1')
-    dqn = Agent(gamma=0.95, epsilon=1.0, input_dims=[4], batch_size=20, n_actions=2, learning_rate=0.001)
+    n_actions = env.action_space.n
+    feature_space_shape = env.observation_space.shape[0]
+
+    agent = Agent(gamma=1, epsilon=1.0, input_dims=[feature_space_shape], batch_size=64, n_actions=n_actions, learning_rate=0.01)
     scores = deque(maxlen = 100)
     for i in range(n_episodes):
         done = False
         observation = env.reset()
         score = 0
         while not done:
-            action = dqn.choose_action(observation)
-            #env.render()
+            action = agent.choose_action(observation)
+            env.render()
             next_observation, reward, done, info = env.step(action)
-            dqn.remember_experience((observation, action, next_observation, reward, done))
-            dqn.learn()
+            agent.remember_experience((observation, action, reward, next_observation, done))
+            agent.learn()
             observation = next_observation
             score += reward
         scores.append(score)
+        print(f"Episode: {i}, Score: {score}")
         if i % 100 == 0:
-            print(f"Episode: {i}, Score: {np.mean(scores)}")
+            print(f"Mean Score: {np.mean(scores)}, Epsilon: {agent.epsilon}")
