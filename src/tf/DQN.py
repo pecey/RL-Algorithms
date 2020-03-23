@@ -50,22 +50,6 @@ class DQN():
         self.memory.append(experience)
 
 
-def evaluate(env, dqn):
-    n_iterations = 100
-    rewards = np.array([])
-    for iteration in range(n_iterations):
-        state = env.reset().reshape(1, -1)
-        done = False
-        iteration_reward = 0
-        while not done:
-            action = dqn.next_action(state)
-            next_state, reward, done, info = env.step(action)
-            iteration_reward += reward
-            state = next_state
-        rewards = np.append(rewards, iteration_reward)
-    return np.mean(rewards)
-
-
 if __name__ == "__main__":
     env = gym.make("CartPole-v1")
     feature_space_shape = env.observation_space.shape
