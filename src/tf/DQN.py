@@ -25,7 +25,7 @@ class DQN():
     def next_action(self, current_state):
         if np.random.random() < self.epsilon:
             return np.random.randint(low = 0, high = n_actions)
-        q_values = self.model.predict(current_state.reshape(1, -1))
+        q_values = self.model.predict(current_state)
         return np.argmax(q_values[0])
 
     def experience_replay(self, batch_size, gamma):
@@ -33,15 +33,17 @@ class DQN():
             return
         batch_indexes = np.random.choice(np.arange(len(self.memory)), batch_size)
         batch = np.array(self.memory)[batch_indexes]
+        x_batch, y_batch = [], []
         for state, action, reward, next_state, done in batch:
-            if done:
-                qsa = reward
-            else:
-                qsa = reward + gamma * np.max(self.model.predict(next_state)[0])
+            qsa = reward if done else reward + gamma * np.max(self.model.predict(next_state)[0])
             q_values = self.model.predict(state)
             q_values[0][action] = qsa
-            self.model.fit(state, q_values, verbose = False)
-            self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
+
+            x_batch.append(state[0])
+            y_batch.append(q_values[0])
+
+        self.model.fit(np.array(x_batch), np.array(y_batch), batch_size = len(x_batch), verbose = False)
+        self.epsilon = max(self.epsilon * self.epsilon_decay, self.min_epsilon)
 
 
     def add_to_experience(self, experience):
@@ -69,23 +71,27 @@ if __name__ == "__main__":
     feature_space_shape = env.observation_space.shape
     n_actions = env.action_space.n
 
-    learning_rate = 0.001
+    learning_rate = 0.01
     episodes_to_train = 1000
     dqn = DQN(n_actions, feature_space_shape[0], 1000000, learning_rate)
 
+    scores = deque(maxlen=100)
     for episode in range(episodes_to_train):
         state = env.reset().reshape(1, -1)
-        steps = 0
         done = False
+        score = 0
         while not done:
-            steps += 1
             action = dqn.next_action(state)
             next_state, reward, done, info = env.step(action)
-            dqn.add_to_experience((state.reshape(1, -1), action, reward, next_state.reshape(1,-1), done))
+            next_state = next_state.reshape(1, -1)
+            dqn.add_to_experience((state, action, reward, next_state, done))
             state = next_state
-            dqn.experience_replay(20, 0.95)
+            score += reward
+            dqn.experience_replay(64, 1)
+        print(f"Episode: {episode}, Score: {score}")
+        scores.append(score)
         if episode % 100 == 0:
-            print(evaluate(env, dqn))
+            print(f"Mean score: {np.mean(scores)}")
 
 
 
