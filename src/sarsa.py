@@ -4,8 +4,8 @@ from collections import deque
 
 
 class SARSA:
-    def __init__(self, n_states, n_actions, gamma, alpha=0.01, epsilon=1, epsilon_decay=0.995, min_epsilon=0.01,
-                 initialization_method="optimistic", optimistic_initializer=1):
+    def __init__(self, n_states, n_actions, gamma, alpha=0.01, epsilon=1.0, epsilon_decay=0.995, min_epsilon=0.01,
+                 initialization_method="optimistic", optimistic_initializer=1.0):
         self.nS = n_states
         self.nA = n_actions
         self.Q_table = self.initialize_Q(initialization_method, optimistic_initializer)
