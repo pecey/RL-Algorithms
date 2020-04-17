@@ -101,7 +101,7 @@ if __name__ == "__main__":
         score = 0
         while not done:
             action = agent.choose_action(observation)
-            env.render()
+            #env.render()
             next_observation, reward, done, info = env.step(action)
             agent.remember_experience((observation, action, reward, next_observation, done))
             agent.learn()
