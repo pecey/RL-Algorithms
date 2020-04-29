@@ -13,6 +13,7 @@ ACTOR_TIMEOUT = 500000
 
 if __name__ == "__main__":
     env = gym.make('CartPole-v1')
+    env.seed(42)
     nS = np.shape(env.observation_space)[0]
     nA = env.action_space.n
 
