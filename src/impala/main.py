@@ -8,6 +8,9 @@ from impala.learner import learner
 from impala.model import Network
 from impala.parameter_server import ParameterServer
 
+from multiprocessing import Process, Manager
+from multiprocessing.managers import BaseManager
+
 NUM_ACTORS = 4
 ACTOR_TIMEOUT = 500000
 
@@ -21,7 +24,11 @@ if __name__ == "__main__":
 
     learner_model = Network(nS, nA, "cpu")
     actor_model = Network(nS, nA, "cpu")
-    parameter_server = ParameterServer()
+
+    BaseManager.register('ParameterServer', ParameterServer)
+    manager = BaseManager()
+    manager.start()
+    parameter_server = manager.ParameterServer()
 
     learner = mp.Process(target = learner, args=(learner_model, queue, parameter_server))
     # Currently each actor has its own object via deepcopy. What happens if I don't explicitly do deepcopy?
