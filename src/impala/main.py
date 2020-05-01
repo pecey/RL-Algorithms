@@ -8,15 +8,16 @@ from impala.learner import learner
 from impala.model import Network
 from impala.parameter_server import ParameterServer
 
-from multiprocessing import Process, Manager
 from multiprocessing.managers import BaseManager
+import warnings
+warnings.filterwarnings("ignore")
 
 NUM_ACTORS = 4
 ACTOR_TIMEOUT = 500000
 
 if __name__ == "__main__":
     env = gym.make('CartPole-v1')
-    env.seed(42)
+    env.seed(48304)
     nS = np.shape(env.observation_space)[0]
     nA = env.action_space.n
 
